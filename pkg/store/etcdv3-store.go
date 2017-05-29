@@ -23,11 +23,11 @@ var (
 
 // EtcdV3 is the receiver type for the Store interface for etcd v3 client API
 type Etcd struct {
-	client *etcdv3.Client
+	config etcdv3.Config
 }
 
 type etcdLock struct {
-	client *etcdv3.Client
+	client etcdv3.Client
 }
 
 const (
@@ -48,11 +48,10 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 
 	var (
 		entries []string
-		err     error
 	)
 
 	entries = store.CreateEndpoints(addrs, "http")
-	cfg := &etcdv3.Config{
+	cfg := etcdv3.Config{
 		Endpoints:        entries,
 		AutoSyncInterval: periodicSync,
 	}
@@ -71,12 +70,18 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 		}
 	}
 
-	s.client, err = etcdv3.New(*cfg)
+	s.config = cfg
+
+	return s, nil
+}
+
+func (s *Etcd) createClient() *etcdv3.Client {
+	client, err := etcdv3.New(s.config)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return s, nil
+	return client
 }
 
 // Normalize the key for usage in Etcd
@@ -88,7 +93,9 @@ func (s *Etcd) normalize(key string) string {
 // Get the value at "key", returns the last modified
 // index to use in conjunction to Atomic calls
 func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
-	resp, err := s.client.Get(context.Background(), s.normalize(key))
+	client := s.createClient()
+	defer client.Close()
+	resp, err := client.Get(context.Background(), s.normalize(key))
 	if err != nil {
 		return nil, err
 	}
@@ -113,22 +120,26 @@ func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
 	putOps := []etcdv3.OpOption{}
 	ctx := context.Background()
 
+	client := s.createClient()
+	defer client.Close()
 	if opts != nil {
 		if opts.TTL > 0 {
-			lease, err := s.client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
+			lease, err := client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
 			if err != nil {
 				return err
 			}
 			putOps = append(putOps, etcdv3.WithLease(lease.ID))
 		}
 	}
-	_, err := s.client.Put(ctx, s.normalize(key), string(value), putOps...)
+	_, err := client.Put(ctx, s.normalize(key), string(value), putOps...)
 	return err
 }
 
 // Delete a value at "key"
 func (s *Etcd) Delete(key string) error {
-	resp, err := s.client.Delete(context.Background(), s.normalize(key))
+	client := s.createClient()
+	defer client.Close()
+	resp, err := client.Delete(context.Background(), s.normalize(key))
 	if err != nil {
 		return err
 	}
@@ -158,17 +169,19 @@ func (s *Etcd) Exists(key string) (bool, error) {
 func (s *Etcd) Watch(key string, stopCh <-chan struct{}) (<-chan *store.KVPair, error) {
 	// watchCh is sending back events to the caller
 	watchCh := make(chan *store.KVPair)
+	client := s.createClient()
+	defer client.Close()
 
 	go func() {
 		defer close(watchCh)
 		ctx := context.Background()
 
-		resp, err := s.client.Get(ctx, s.normalize(key))
+		resp, err := client.Get(ctx, s.normalize(key))
 		if err != nil {
 			return
 		}
 
-		rch := s.client.Watch(ctx, s.normalize(key),
+		rch := client.Watch(ctx, s.normalize(key),
 			etcdv3.WithRev(resp.Header.Revision),
 			etcdv3.WithFilterDelete(),
 		)
@@ -203,6 +216,9 @@ func (s *Etcd) Watch(key string, stopCh <-chan struct{}) (<-chan *store.KVPair, 
 // be used to stop watching.
 func (s *Etcd) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*store.KVPair, error) {
 	// watchCh is sending back events to the caller
+	client := s.createClient()
+	defer client.Close()
+
 	watchCh := make(chan []*store.KVPair)
 
 	go func() {
@@ -210,12 +226,12 @@ func (s *Etcd) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*st
 
 		ctx := context.Background()
 
-		resp, err := s.client.Get(ctx, s.normalize(directory), etcdv3.WithPrefix())
+		resp, err := client.Get(ctx, s.normalize(directory), etcdv3.WithPrefix())
 		if err != nil {
 			return
 		}
 
-		rch := s.client.Watch(context.Background(), s.normalize(directory),
+		rch := client.Watch(context.Background(), s.normalize(directory),
 			etcdv3.WithRev(resp.Header.Revision),
 			etcdv3.WithPrefix())
 
@@ -249,9 +265,12 @@ func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts 
 		lastModRev int64 = 0
 	)
 
+	client := s.createClient()
+	defer client.Close()
+
 	if opts != nil {
 		if opts.TTL > 0 {
-			lease, err := s.client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
+			lease, err := client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
 			if err != nil {
 				return false, nil, err
 			}
@@ -263,7 +282,7 @@ func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts 
 		lastModRev = int64(previous.LastIndex)
 	}
 
-	resp, err := s.client.Txn(ctx).If(
+	resp, err := client.Txn(ctx).If(
 		etcdv3.Compare(etcdv3.ModRevision(keyName), "=", lastModRev),
 	).Then(
 		etcdv3.OpPut(keyName, string(value), putOps...),
@@ -304,7 +323,10 @@ func (s *Etcd) AtomicDelete(key string, previous *store.KVPair) (bool, error) {
 		keyName    = s.normalize(key)
 	)
 
-	resp, err := s.client.Txn(ctx).If(
+	client := s.createClient()
+	defer client.Close()
+
+	resp, err := client.Txn(ctx).If(
 		etcdv3.Compare(etcdv3.ModRevision(keyName), "=", lastModRev),
 	).Then(
 		etcdv3.OpDelete(keyName),
@@ -323,7 +345,9 @@ func (s *Etcd) AtomicDelete(key string, previous *store.KVPair) (bool, error) {
 
 //// List child nodes of a given directory
 func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
-	resp, err := s.client.Get(context.Background(), s.normalize(directory),
+	client := s.createClient()
+	defer client.Close()
+	resp, err := client.Get(context.Background(), s.normalize(directory),
 		etcdv3.WithPrefix(),
 		etcdv3.WithSort(etcdv3.SortByKey, etcdv3.SortAscend),
 	)
@@ -347,7 +371,9 @@ func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
 
 // DeleteTree deletes a range of keys under a given directory
 func (s *Etcd) DeleteTree(directory string) error {
-	resp, err := s.client.Delete(context.Background(), s.normalize(directory),
+	client := s.createClient()
+	defer client.Close()
+	resp, err := client.Delete(context.Background(), s.normalize(directory),
 		etcdv3.WithPrefix())
 	if err != nil {
 		return err
@@ -379,6 +405,5 @@ func (l *etcdLock) Unlock() error {
 
 // Close closes the client connection
 func (s *Etcd) Close() {
-	s.client.Close()
 	return
 }
