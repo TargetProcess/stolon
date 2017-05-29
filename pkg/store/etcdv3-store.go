@@ -109,6 +109,7 @@ func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 
 // Put a value at "key"
 func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
+	fmt.Println("Puting key %s via etcd v3 client./n", key)
 	putOps := []etcdv3.OpOption{}
 	ctx := context.Background()
 

@@ -92,7 +92,7 @@ func die(format string, a ...interface{}) {
 
 func NewStore() (*store.StoreManager, error) {
 	storePath := filepath.Join(common.StoreBasePath, cfg.clusterName)
-	fmt.Printf("Store backend %s", cfg.storeBackend)
+	fmt.Printf("Store backend %s /n", cfg.storeBackend)
 	kvstore, err := store.NewStore(store.Config{
 		Backend:       store.Backend(cfg.storeBackend),
 		Endpoints:     cfg.storeEndpoints,
