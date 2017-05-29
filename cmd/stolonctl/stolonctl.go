@@ -92,7 +92,7 @@ func die(format string, a ...interface{}) {
 
 func NewStore() (*store.StoreManager, error) {
 	storePath := filepath.Join(common.StoreBasePath, cfg.clusterName)
-
+	fmt.Printf("Store backend %s", cfg.storeBackend)
 	kvstore, err := store.NewStore(store.Config{
 		Backend:       store.Backend(cfg.storeBackend),
 		Endpoints:     cfg.storeEndpoints,
@@ -101,6 +101,7 @@ func NewStore() (*store.StoreManager, error) {
 		CAFile:        cfg.storeCAFile,
 		SkipTLSVerify: cfg.storeSkipTlsVerify,
 	})
+	fmt.Printf("Kvstore created")
 	if err != nil {
 		return nil, fmt.Errorf("cannot create store: %v", err)
 	}
