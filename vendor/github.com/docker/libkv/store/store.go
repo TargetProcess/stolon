@@ -18,6 +18,8 @@ const (
 	ZK Backend = "zk"
 	// BOLTDB backend
 	BOLTDB Backend = "boltdb"
+	//ETCDV3 backend
+	ETCDV3 Backend = "etcdv3"
 )
 
 var (

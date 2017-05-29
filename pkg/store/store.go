@@ -36,6 +36,7 @@ import (
 func init() {
 	etcd.Register()
 	consul.Register()
+	Register()
 }
 
 // Backend represents a KV Store Backend
@@ -44,6 +45,7 @@ type Backend string
 const (
 	CONSUL Backend = "consul"
 	ETCD   Backend = "etcd"
+	ETCDV3 Backend = "etcdv3"
 )
 
 const (
@@ -90,6 +92,8 @@ func NewStore(cfg Config) (kvstore.Store, error) {
 		kvBackend = kvstore.CONSUL
 	case ETCD:
 		kvBackend = kvstore.ETCD
+	case ETCDV3:
+		kvBackend = kvstore.ETCDV3
 	default:
 		return nil, fmt.Errorf("Unknown store backend: %q", cfg.Backend)
 	}
