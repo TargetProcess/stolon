@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -31,9 +28,10 @@ type Etcd struct {
 }
 
 type etcdLock struct {
-	key   string
-	store *Etcd
-	mutex *concurrency.Mutex
+	key     string
+	store   *Etcd
+	mutex   *concurrency.Mutex
+	context context.Context
 }
 
 const (
@@ -405,43 +403,25 @@ func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locke
 // lock is lost or if an error occurs
 func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	client := l.store.createClient()
-	log.Println("Starting new session")
 	s, err := concurrency.NewSession(client)
 	if err != nil {
-		log.Println("Error create session.")
-		log.Println(err)
 		return nil, err
 	}
 
 	l.mutex = concurrency.NewMutex(s, l.key)
-	ctx, cancel := context.WithCancel(context.TODO())
-
-	// unlock in case of ordinary shutdown
-	donec := make(chan struct{})
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigc
-		cancel()
-		close(donec)
-	}()
+	ctx, _ := context.WithCancel(context.TODO())
 
 	result := make(chan struct{})
 
-	go func() {
-		fmt.Println("Try get lock.")
-		lockErr := l.mutex.Lock(ctx)
-		fmt.Println("Exit lock.")
-		if lockErr != nil {
-			fmt.Println(lockErr)
-		}
+	lockErr := l.mutex.Lock(ctx)
+	if lockErr != nil {
+		fmt.Println(lockErr)
+	}
 
-		select {
-		case <-donec:
-			l.mutex.Unlock(context.TODO())
-		case <-s.Done():
-		}
-		defer close(result)
+	go func() {
+		<-stopChan
+		l.mutex.Unlock(context.TODO())
+		close(result)
 	}()
 
 	return result, nil
