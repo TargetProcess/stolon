@@ -3,7 +3,6 @@ package store
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -79,13 +78,13 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 	return s, nil
 }
 
-func (s *Etcd) createClient() *etcdv3.Client {
+func (s *Etcd) createClient() (*etcdv3.Client, error) {
 	client, err := etcdv3.New(s.config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return client
+	return client, nil
 }
 
 // Normalize the key for usage in Etcd
@@ -97,17 +96,16 @@ func (s *Etcd) normalize(key string) string {
 // Get the value at "key", returns the last modified
 // index to use in conjunction to Atomic calls
 func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
-	fmt.Println("getting key:")
-	fmt.Println(key)
-	fmt.Println("Creating client")
-	client := s.createClient()
-	fmt.Println("Client created")
-	defer client.Close()
-	fmt.Println("Start getting")
-	resp, err := client.Get(context.Background(), s.normalize(key))
-	fmt.Println("End getting")
+	client, err := s.createClient()
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
+
+	resp, err := client.Get(context.Background(), s.normalize(key))
+	if err != nil {
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
@@ -121,46 +119,48 @@ func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 		Value:     kv.Value,
 		LastIndex: uint64(kv.ModRevision),
 	}
-	fmt.Println("exit get")
 	return pair, nil
 }
 
 // Put a value at "key"
 func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
-	fmt.Println("Putting key:")
-	fmt.Println(key)
 	putOps := []etcdv3.OpOption{}
 	ctx := context.Background()
 
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return err
+	}
+	if client != nil {
+		defer client.Close()
+	}
+
 	if opts != nil {
 		if opts.TTL > 0 {
 			lease, err := client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
 			if err != nil {
-				fmt.Println(err)
 				return err
 			}
 			putOps = append(putOps, etcdv3.WithLease(lease.ID))
 		}
 	}
-	_, err := client.Put(ctx, s.normalize(key), string(value), putOps...)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("Exit put.")
+	_, err = client.Put(ctx, s.normalize(key), string(value), putOps...)
+
 	return err
 }
 
 // Delete a value at "key"
 func (s *Etcd) Delete(key string) error {
-	fmt.Println("Deleting key:")
-	fmt.Println(key)
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return err
+	}
+	if client != nil {
+		defer client.Close()
+	}
+
 	resp, err := client.Delete(context.Background(), s.normalize(key))
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	if resp.Deleted == 0 {
@@ -189,8 +189,13 @@ func (s *Etcd) Exists(key string) (bool, error) {
 func (s *Etcd) Watch(key string, stopCh <-chan struct{}) (<-chan *store.KVPair, error) {
 	// watchCh is sending back events to the caller
 	watchCh := make(chan *store.KVPair)
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 
 	go func() {
 		defer close(watchCh)
@@ -236,8 +241,13 @@ func (s *Etcd) Watch(key string, stopCh <-chan struct{}) (<-chan *store.KVPair, 
 // be used to stop watching.
 func (s *Etcd) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*store.KVPair, error) {
 	// watchCh is sending back events to the caller
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 
 	watchCh := make(chan []*store.KVPair)
 
@@ -278,8 +288,6 @@ func (s *Etcd) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*st
 // AtomicPut puts a value at "key" if the key has not been
 // modified in the meantime, throws an error if this is the case
 func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts *store.WriteOptions) (bool, *store.KVPair, error) {
-	fmt.Println("Atomic put:")
-	fmt.Println(key)
 	var (
 		putOps           = []etcdv3.OpOption{}
 		ctx              = context.Background()
@@ -287,8 +295,13 @@ func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts 
 		lastModRev int64 = 0
 	)
 
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return false, nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 
 	if opts != nil {
 		if opts.TTL > 0 {
@@ -311,7 +324,6 @@ func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts 
 		etcdv3.OpGet(keyName),
 	).Commit()
 	if err != nil {
-		fmt.Println(err)
 		return false, nil, err
 	}
 	if !resp.Succeeded {
@@ -346,8 +358,13 @@ func (s *Etcd) AtomicDelete(key string, previous *store.KVPair) (bool, error) {
 		keyName    = s.normalize(key)
 	)
 
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return false, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 
 	resp, err := client.Txn(ctx).If(
 		etcdv3.Compare(etcdv3.ModRevision(keyName), "=", lastModRev),
@@ -368,16 +385,18 @@ func (s *Etcd) AtomicDelete(key string, previous *store.KVPair) (bool, error) {
 
 //// List child nodes of a given directory
 func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
-	fmt.Println("listing directory:")
-	fmt.Println(directory)
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 	resp, err := client.Get(context.Background(), s.normalize(directory),
 		etcdv3.WithPrefix(),
 		etcdv3.WithSort(etcdv3.SortByKey, etcdv3.SortAscend),
 	)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
@@ -397,8 +416,13 @@ func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
 
 // DeleteTree deletes a range of keys under a given directory
 func (s *Etcd) DeleteTree(directory string) error {
-	client := s.createClient()
-	defer client.Close()
+	client, err := s.createClient()
+	if err != nil {
+		return err
+	}
+	if client != nil {
+		defer client.Close()
+	}
 	resp, err := client.Delete(context.Background(), s.normalize(directory),
 		etcdv3.WithPrefix())
 	if err != nil {
@@ -425,7 +449,14 @@ func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locke
 // doing so. It returns a channel that is closed if our
 // lock is lost or if an error occurs
 func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
-	client := l.store.createClient()
+	client, err := l.store.createClient()
+	if err != nil {
+		return nil, err
+	}
+	if client != nil {
+		defer client.Close()
+	}
+
 	s, err := concurrency.NewSession(client)
 	if err != nil {
 		return nil, err
@@ -455,7 +486,7 @@ func (l *etcdLock) Unlock() error {
 	if l.mutex != nil {
 		return l.mutex.Unlock(context.TODO())
 	}
-	return fmt.Errorf("Lock was not opened./n")
+	return errors.New("Lock was not opened")
 }
 
 // Close closes the client connection

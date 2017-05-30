@@ -201,11 +201,8 @@ func (e *StoreManager) PutClusterData(cd *cluster.ClusterData) error {
 func (e *StoreManager) GetClusterData() (*cluster.ClusterData, *kvstore.KVPair, error) {
 	var cd *cluster.ClusterData
 	path := filepath.Join(e.clusterPath, clusterDataFile)
-	fmt.Println("Get cluster data in store:")
 	pair, err := e.store.Get(path)
-	fmt.Println("end Get cluster data in store:")
 	if err != nil {
-		fmt.Println(err)
 		if err != kvstore.ErrKeyNotFound {
 			return nil, nil, err
 		}
