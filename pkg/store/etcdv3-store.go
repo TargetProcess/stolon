@@ -97,10 +97,13 @@ func (s *Etcd) normalize(key string) string {
 // Get the value at "key", returns the last modified
 // index to use in conjunction to Atomic calls
 func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
+	fmt.Println("getting key:")
+	fmt.Println(key)
 	client := s.createClient()
 	defer client.Close()
 	resp, err := client.Get(context.Background(), s.normalize(key))
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
