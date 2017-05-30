@@ -117,7 +117,7 @@ func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 		Value:     kv.Value,
 		LastIndex: uint64(kv.ModRevision),
 	}
-
+	fmt.Println("exit get")
 	return pair, nil
 }
 
@@ -141,6 +141,10 @@ func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
 		}
 	}
 	_, err := client.Put(ctx, s.normalize(key), string(value), putOps...)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("Exit put.")
 	return err
 }
 
