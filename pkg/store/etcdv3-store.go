@@ -412,17 +412,16 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	ctx, _ := context.WithCancel(context.TODO())
 
 	result := make(chan struct{})
-
-	lockErr := l.mutex.Lock(ctx)
-	if lockErr != nil {
-		fmt.Println(lockErr)
-	}
-
 	go func() {
 		<-stopChan
 		l.mutex.Unlock(context.TODO())
 		close(result)
 	}()
+
+	lockErr := l.mutex.Lock(ctx)
+	if lockErr != nil {
+		return nil, lockErr
+	}
 
 	return result, nil
 }
