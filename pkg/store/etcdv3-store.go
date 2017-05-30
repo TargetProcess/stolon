@@ -123,6 +123,8 @@ func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 
 // Put a value at "key"
 func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
+	fmt.Println("Putting key:")
+	fmt.Println(key)
 	putOps := []etcdv3.OpOption{}
 	ctx := context.Background()
 
@@ -132,6 +134,7 @@ func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
 		if opts.TTL > 0 {
 			lease, err := client.Lease.Grant(ctx, int64(opts.TTL.Seconds()))
 			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 			putOps = append(putOps, etcdv3.WithLease(lease.ID))
@@ -143,10 +146,13 @@ func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
 
 // Delete a value at "key"
 func (s *Etcd) Delete(key string) error {
+	fmt.Println("Deleting key:")
+	fmt.Println(key)
 	client := s.createClient()
 	defer client.Close()
 	resp, err := client.Delete(context.Background(), s.normalize(key))
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 	if resp.Deleted == 0 {
@@ -264,6 +270,8 @@ func (s *Etcd) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*st
 // AtomicPut puts a value at "key" if the key has not been
 // modified in the meantime, throws an error if this is the case
 func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts *store.WriteOptions) (bool, *store.KVPair, error) {
+	fmt.Println("Atomic put:")
+	fmt.Println(key)
 	var (
 		putOps           = []etcdv3.OpOption{}
 		ctx              = context.Background()
@@ -295,6 +303,7 @@ func (s *Etcd) AtomicPut(key string, value []byte, previous *store.KVPair, opts 
 		etcdv3.OpGet(keyName),
 	).Commit()
 	if err != nil {
+		fmt.Println(err)
 		return false, nil, err
 	}
 	if !resp.Succeeded {
@@ -351,6 +360,8 @@ func (s *Etcd) AtomicDelete(key string, previous *store.KVPair) (bool, error) {
 
 //// List child nodes of a given directory
 func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
+	fmt.Println("listing directory:")
+	fmt.Println(directory)
 	client := s.createClient()
 	defer client.Close()
 	resp, err := client.Get(context.Background(), s.normalize(directory),
@@ -358,6 +369,7 @@ func (s *Etcd) List(directory string) ([]*store.KVPair, error) {
 		etcdv3.WithSort(etcdv3.SortByKey, etcdv3.SortAscend),
 	)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	if len(resp.Kvs) == 0 {
