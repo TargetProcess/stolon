@@ -99,9 +99,13 @@ func (s *Etcd) normalize(key string) string {
 func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 	fmt.Println("getting key:")
 	fmt.Println(key)
+	fmt.Println("Creating client")
 	client := s.createClient()
+	fmt.Println("Client created")
 	defer client.Close()
+	fmt.Println("Start getting")
 	resp, err := client.Get(context.Background(), s.normalize(key))
+	fmt.Println("End getting")
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
