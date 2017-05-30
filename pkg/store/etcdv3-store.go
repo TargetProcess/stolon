@@ -405,8 +405,11 @@ func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locke
 // lock is lost or if an error occurs
 func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	client := l.store.createClient()
+	log.Println("Starting new session")
 	s, err := concurrency.NewSession(client)
 	if err != nil {
+		log.Println("Error create session.")
+		log.Println(err)
 		return nil, err
 	}
 
@@ -426,7 +429,12 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	result := make(chan struct{})
 
 	go func() {
-		l.mutex.Lock(ctx)
+		fmt.Println("Try get lock.")
+		lockErr := l.mutex.Lock(ctx)
+		fmt.Println("Exit lock.")
+		if lockErr != nil {
+			fmt.Println(lockErr)
+		}
 
 		select {
 		case <-donec:
