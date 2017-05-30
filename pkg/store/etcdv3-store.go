@@ -4,12 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
 
 	etcdv3 "github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
 )
@@ -27,7 +31,9 @@ type Etcd struct {
 }
 
 type etcdLock struct {
-	client etcdv3.Client
+	key   string
+	store *Etcd
+	mutex *concurrency.Mutex
 }
 
 const (
@@ -116,7 +122,6 @@ func (s *Etcd) Get(key string) (pair *store.KVPair, err error) {
 
 // Put a value at "key"
 func (s *Etcd) Put(key string, value []byte, opts *store.WriteOptions) error {
-	fmt.Println("Puting key %s via etcd v3 client./n", key)
 	putOps := []etcdv3.OpOption{}
 	ctx := context.Background()
 
@@ -387,20 +392,60 @@ func (s *Etcd) DeleteTree(directory string) error {
 //// NewLock returns a handle to a lock struct which can
 //// be used to provide mutual exclusion on a key
 func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locker, err error) {
-	return nil, store.ErrCallNotSupported
+	// Create lock object
+	lock = &etcdLock{
+		key:   s.normalize(key),
+		store: s}
+
+	return lock, nil
 }
 
 // Lock attempts to acquire the lock and blocks while
 // doing so. It returns a channel that is closed if our
 // lock is lost or if an error occurs
 func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
-	return nil, store.ErrCallNotSupported
+	client := l.store.createClient()
+	s, err := concurrency.NewSession(client)
+	if err != nil {
+		return nil, err
+	}
+
+	l.mutex = concurrency.NewMutex(s, l.key)
+	ctx, cancel := context.WithCancel(context.TODO())
+
+	// unlock in case of ordinary shutdown
+	donec := make(chan struct{})
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		cancel()
+		close(donec)
+	}()
+
+	result := make(chan struct{})
+
+	go func() {
+		l.mutex.Lock(ctx)
+
+		select {
+		case <-donec:
+			l.mutex.Unlock(context.TODO())
+		case <-s.Done():
+		}
+		defer close(result)
+	}()
+
+	return result, nil
 }
 
 // Unlock the "key". Calling unlock while
 // not holding the lock will throw an error
 func (l *etcdLock) Unlock() error {
-	return store.ErrCallNotSupported
+	if l.mutex != nil {
+		return l.mutex.Unlock(context.TODO())
+	}
+	return fmt.Errorf("Lock was not opened./n")
 }
 
 // Close closes the client connection
