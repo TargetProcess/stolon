@@ -3,6 +3,7 @@ package etcd
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -439,6 +440,10 @@ func (s *Etcd) DeleteTree(directory string) error {
 // NewLock returns a handle to a lock struct which can
 // be used to provide mutual exclusion on a key
 func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locker, err error) {
+	fmt.Println("Key:")
+	fmt.Println(key)
+	fmt.Println("Value:")
+	fmt.Println(options.Value)
 	var value string
 	ttl := defaultLockTTL
 	renewCh := make(chan struct{})

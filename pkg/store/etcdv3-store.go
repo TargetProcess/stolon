@@ -438,6 +438,10 @@ func (s *Etcd) DeleteTree(directory string) error {
 //// be used to provide mutual exclusion on a key
 func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locker, err error) {
 	// Create lock object
+	fmt.Println("Key:")
+	fmt.Println(key)
+	fmt.Println("Value:")
+	fmt.Println(options.Value)
 	lock = &etcdLock{
 		key:   s.normalize(key),
 		store: s}
