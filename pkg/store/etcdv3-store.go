@@ -31,6 +31,7 @@ type etcdLock struct {
 	store   *Etcd
 	mutex   *concurrency.Mutex
 	context context.Context
+	client  *etcdv3.Client
 }
 
 const (
@@ -454,11 +455,9 @@ func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locke
 // lock is lost or if an error occurs
 func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	client, err := l.store.createClient()
+	l.client = client
 	if err != nil {
 		return nil, err
-	}
-	if client != nil {
-		defer client.Close()
 	}
 
 	s, err := concurrency.NewSession(client)
@@ -490,6 +489,7 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 // Unlock the "key". Calling unlock while
 // not holding the lock will throw an error
 func (l *etcdLock) Unlock() error {
+	defer l.client.Close()
 	if l.mutex != nil {
 		return l.mutex.Unlock(context.TODO())
 	}
