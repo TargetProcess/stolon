@@ -473,7 +473,10 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	}()
 
 	lockErr := l.mutex.Lock(ctx)
+	fmt.Println("Locked with key:")
+	fmt.Println(l.mutex.Key())
 	if lockErr != nil {
+		fmt.Println(lockErr)
 		return nil, lockErr
 	}
 

@@ -23,7 +23,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -99,7 +98,6 @@ func die(format string, a ...interface{}) {
 
 func (s *Sentinel) electionLoop() {
 	for {
-		fmt.Printf("Hello %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		log.Info("Trying to acquire sentinels leadership")
 		electedCh, errCh := s.candidate.RunForElection()
 		for {
