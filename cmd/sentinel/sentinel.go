@@ -1443,6 +1443,8 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	log.Debug("keepersInfo dump", zap.String("keepersInfo", spew.Sdump(keepersInfo)))
 
 	isLeader, leadershipCount := s.leaderInfo()
+	log.Info(fmt.Sprintf("Is leader: %v\n", isLeader))
+
 	if !isLeader {
 		return
 	}
@@ -1479,7 +1481,6 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	if newcd != nil {
 		if _, err := e.AtomicPutClusterData(newcd, prevCDPair); err != nil {
 			log.Error("error saving clusterdata", zap.Error(err))
-			os.Exit(1)
 		}
 	}
 

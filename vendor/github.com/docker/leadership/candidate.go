@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+
 	"github.com/docker/libkv/store"
 )
 
@@ -116,14 +118,17 @@ func (c *Candidate) campaign() {
 	for {
 		// Start as a follower.
 		c.update(false)
+		fmt.Println("Start election loop")
 
 		lock, err := c.initLock()
+
 		if err != nil {
 			c.errCh <- err
 			return
 		}
 
 		lostCh, err := lock.Lock(nil)
+		fmt.Println("Locked")
 		if err != nil {
 			c.errCh <- err
 			return

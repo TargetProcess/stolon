@@ -439,10 +439,6 @@ func (s *Etcd) DeleteTree(directory string) error {
 //// be used to provide mutual exclusion on a key
 func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locker, err error) {
 	// Create lock object
-	fmt.Println("Key:")
-	fmt.Println(key)
-	fmt.Println("Value:")
-	fmt.Println(options.Value)
 	lock = &etcdLock{
 		key:   s.normalize(key),
 		store: s}
@@ -476,10 +472,7 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 	}()
 
 	lockErr := l.mutex.Lock(ctx)
-	fmt.Println("Locked with key:")
-	fmt.Println(l.mutex.Key())
 	if lockErr != nil {
-		fmt.Println(lockErr)
 		return nil, lockErr
 	}
 
