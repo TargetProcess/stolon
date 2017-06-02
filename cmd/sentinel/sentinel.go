@@ -1443,7 +1443,6 @@ func (s *Sentinel) clusterSentinelCheck(pctx context.Context) {
 	log.Debug("keepersInfo dump", zap.String("keepersInfo", spew.Sdump(keepersInfo)))
 
 	isLeader, leadershipCount := s.leaderInfo()
-	log.Info(fmt.Sprintf("Is leader: %v\n", isLeader))
 
 	if !isLeader {
 		return
