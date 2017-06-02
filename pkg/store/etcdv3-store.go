@@ -29,6 +29,7 @@ type Etcd struct {
 type etcdLock struct {
 	key     string
 	store   *Etcd
+	ttl     time.Duration
 	mutex   *concurrency.Mutex
 	context context.Context
 	client  *etcdv3.Client
@@ -440,6 +441,7 @@ func (s *Etcd) DeleteTree(directory string) error {
 func (s *Etcd) NewLock(key string, options *store.LockOptions) (lock store.Locker, err error) {
 	// Create lock object
 	lock = &etcdLock{
+		ttl:   options.TTL,
 		key:   s.normalize(key),
 		store: s}
 
@@ -456,19 +458,24 @@ func (l *etcdLock) Lock(stopChan chan struct{}) (<-chan struct{}, error) {
 		return nil, err
 	}
 
-	s, err := concurrency.NewSession(client)
+	s, err := concurrency.NewSession(client, concurrency.WithLease(etcdv3.NoLease), concurrency.WithTTL(int(l.ttl/time.Second)))
 	if err != nil {
 		return nil, err
 	}
 
 	l.mutex = concurrency.NewMutex(s, l.key)
-	ctx, _ := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(context.TODO())
 
 	result := make(chan struct{})
 	go func() {
-		<-stopChan
-		l.mutex.Unlock(context.TODO())
-		close(result)
+		select {
+		case <-stopChan:
+		case <-s.Done():
+			close(result)
+			cancel()
+			l.mutex.Unlock(ctx)
+			l.client.Close()
+		}
 	}()
 
 	lockErr := l.mutex.Lock(ctx)
