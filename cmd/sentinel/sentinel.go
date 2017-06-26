@@ -631,6 +631,9 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData) (*cluster.ClusterData,
 	origcd := cd.DeepCopy()
 	newcd := cd.DeepCopy()
 	clusterSpec := cd.Cluster.DefSpec()
+	log.Info("Update cluster!")
+	res := fmt.Sprintln(cd.Cluster.Status.Phase)
+	log.Info(res)
 
 	switch cd.Cluster.Status.Phase {
 	case cluster.ClusterPhaseInitializing:
@@ -810,14 +813,14 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData) (*cluster.ClusterData,
 				// skip keepers with an assigned db
 				continue
 			}
-			fmt.Println("Time now:")
-			fmt.Println(time.Now())
-			fmt.Println("Last healthy time:")
-			fmt.Println(k.Status.LastHealthyTime)
-			fmt.Println("Dead keeper remove interval:")
-			fmt.Println(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration)
-			fmt.Println("Evaluated:")
-			fmt.Println(time.Now().After(k.Status.LastHealthyTime.Add(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration)))
+			log.Info("Time now:")
+			log.Info(fmt.Sprintln(time.Now()))
+			log.Info("Last healthy time:")
+			log.Info(fmt.Sprintln(k.Status.LastHealthyTime))
+			log.Info("Dead keeper remove interval:")
+			log.Info(fmt.Sprintln(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration))
+			log.Info("Evaluated:")
+			log.Info(fmt.Sprintln(time.Now().After(k.Status.LastHealthyTime.Add(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration))))
 			if time.Now().After(k.Status.LastHealthyTime.Add(cd.Cluster.DefSpec().DeadKeeperRemovalInterval.Duration)) {
 				log.Info("removing old dead keeper", zap.String("keeper", k.UID))
 				keepersToRemove = append(keepersToRemove, k)
