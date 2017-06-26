@@ -809,6 +809,10 @@ func (s *Sentinel) updateCluster(cd *cluster.ClusterData) (*cluster.ClusterData,
 		for _, k := range newcd.Keepers {
 			// get db associated to the keeper
 			db := s.getDBForKeeper(cd, k.UID)
+			log.Info("db:")
+			log.Info(fmt.Sprintln(db))
+			log.Info("keeper:")
+			log.Info(fmt.Sprintln(k))
 			if db != nil {
 				// skip keepers with an assigned db
 				continue
