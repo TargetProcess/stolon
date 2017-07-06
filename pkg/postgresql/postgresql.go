@@ -399,6 +399,8 @@ func (p *Manager) IsInitialized() (bool, error) {
 			return false, err
 		}
 		if !exists {
+			log.Warn("File not exist")
+			log.Warn(f)
 			return false, nil
 		}
 	}
