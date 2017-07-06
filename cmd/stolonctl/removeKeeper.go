@@ -7,7 +7,7 @@ import (
 )
 
 var removeKeeperCmd = &cobra.Command{
-	Use:   "remove keeper",
+	Use:   "remove",
 	Short: "Removes keeper from cluster config",
 	Run:   removeKeeper,
 }
